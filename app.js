@@ -21,6 +21,7 @@ function parsePromptFile(fileName) {
     id: fileName.replace(/\.md$/i, ""),
     name: data.name || fileName.replace(/\.md$/i, ""),
     author: data.author || "",
+    categories: (data.categories || "").split(",").map((category) => category.trim()).filter(Boolean),
     profilePicture: data.profile_picture || "",
     description: data.description || "",
     prompt: promptSection

@@ -15,6 +15,11 @@
     h1 { margin: 21px 0 7px; font-size: 42px; letter-spacing: -.06em; line-height: 1; }
     .intro { margin: 0; color: var(--muted); }
     .count { color: var(--muted); font-size: 11px; }
+    .search { width: 100%; margin-bottom: 20px; padding: 12px 14px; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; outline: 0; background: #fff; font: inherit; }
+    .search:focus { border-color: #b7a5f4; box-shadow: 0 0 0 3px #6f45e812; }
+    .filters { display: flex; flex-wrap: wrap; gap: 7px; margin: -7px 0 20px; }
+    .filter { padding: 6px 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 20px; background: transparent; font-size: 10px; }
+    .filter:hover, .filter.active { color: var(--purple); border-color: #cfc4f8; background: #efeaff; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
     .card { display: flex; flex-direction: column; min-height: 210px; padding: 19px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 12px 30px #261f4308; }
     .identity { display: flex; align-items: center; gap: 11px; }
@@ -23,6 +28,8 @@
     .name { font-weight: 700; }
     .file { margin-top: 2px; color: var(--muted); font-size: 10px; }
     .author { margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .categories { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .category { padding: 3px 7px; color: #6f45e8; border-radius: 20px; background: #efeaff; font-size: 9px; font-weight: 650; }
     .description { flex: 1; margin: 18px 0; color: #666b75; font-size: 13px; white-space: pre-wrap; }
     .description p { margin: 0 0 7px; }
     .description p:last-child { margin-bottom: 0; }
@@ -47,6 +54,8 @@
       <div><a class="back" href="/">← Back to chat</a><h1>Prompts</h1><p class="intro">Reusable starting points for better conversations.</p></div>
       <span class="count" id="count"></span>
     </div>
+    <input class="search" id="search" type="search" placeholder="Search prompts…" aria-label="Search prompts">
+    <div class="filters" id="filters" aria-label="Filter prompts"></div>
     <section class="grid" id="promptGrid"><div class="empty">Loading prompts…</div></section>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -54,6 +63,10 @@
   <script>
     const grid = document.getElementById("promptGrid");
     const count = document.getElementById("count");
+    const search = document.getElementById("search");
+    const filters = document.getElementById("filters");
+    let allPrompts = [];
+    let activeCategory = "";
     function escapeHtml(value) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character]); }
     function renderMarkup(value) {
       if (typeof marked === "undefined" || typeof DOMPurify === "undefined") return escapeHtml(value).replace(/\r?\n/g, "<br>");
@@ -64,7 +77,8 @@
       if (!prompts.length) { grid.innerHTML = '<div class="empty">No prompts yet. Add Markdown files to <code>prompts/data</code>.</div>'; return; }
       grid.innerHTML = prompts.map((prompt) => {
         const avatar = prompt.profilePicture ? `<img src="${escapeHtml(prompt.profilePicture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : escapeHtml(prompt.name.charAt(0).toUpperCase());
-        return `<article class="card"><div class="identity"><div class="avatar">${avatar}</div><div><div class="name">${escapeHtml(prompt.name)}</div><div class="file">${escapeHtml(prompt.id)}.md</div>${prompt.author ? `<div class="author">By ${escapeHtml(prompt.author)}</div>` : ""}</div></div><div class="description">${renderMarkup(prompt.description || "No description provided.")}</div><details class="preview"><summary>Preview prompt</summary><div class="prompt-content">${renderMarkup(prompt.prompt)}</div></details><button class="copy" type="button" data-prompt="${encodeURIComponent(prompt.prompt)}">Copy prompt</button></article>`;
+        const categories = prompt.categories?.length ? `<div class="categories">${prompt.categories.map((category) => `<span class="category">${escapeHtml(category)}</span>`).join("")}</div>` : "";
+        return `<article class="card"><div class="identity"><div class="avatar">${avatar}</div><div><div class="name">${escapeHtml(prompt.name)}</div><div class="file">${escapeHtml(prompt.id)}.md</div>${prompt.author ? `<div class="author">By ${escapeHtml(prompt.author)}</div>` : ""}</div></div>${categories}<div class="description">${renderMarkup(prompt.description || "No description provided.")}</div><details class="preview"><summary>Preview prompt</summary><div class="prompt-content">${renderMarkup(prompt.prompt)}</div></details><button class="copy" type="button" data-prompt="${encodeURIComponent(prompt.prompt)}">Copy prompt</button></article>`;
       }).join("");
       grid.querySelectorAll(".copy").forEach((button) => button.addEventListener("click", async () => {
         await navigator.clipboard.writeText(decodeURIComponent(button.dataset.prompt));
@@ -72,7 +86,28 @@
         setTimeout(() => { button.textContent = "Copy prompt"; }, 1400);
       }));
     }
-    fetch("/api/prompts").then((response) => { if (!response.ok) throw new Error("Prompt API failed"); return response.json(); }).then(render).catch(() => { grid.innerHTML = '<div class="empty error">Prompts could not be loaded right now.</div>'; });
+    function renderFilters() {
+      const categories = [...new Set(allPrompts.flatMap((prompt) => prompt.categories || []))].sort();
+      filters.innerHTML = ['<button class="filter active" type="button" data-category="">All</button>', ...categories.map((category) => `<button class="filter" type="button" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`)].join("");
+      filters.querySelectorAll(".filter").forEach((button) => button.addEventListener("click", () => {
+        activeCategory = button.dataset.category;
+        filters.querySelectorAll(".filter").forEach((item) => item.classList.toggle("active", item === button));
+        applyFilters();
+      }));
+    }
+    function applyFilters() {
+      const query = search.value.trim().toLowerCase();
+      const filtered = allPrompts.filter((prompt) => {
+        const matchesCategory = !activeCategory || (prompt.categories || []).includes(activeCategory);
+        const matchesSearch = [prompt.name, prompt.author, prompt.description, prompt.prompt, ...(prompt.categories || [])].join(" ").toLowerCase().includes(query);
+        return matchesCategory && matchesSearch;
+      });
+      render(filtered);
+    }
+    search.addEventListener("input", () => {
+      applyFilters();
+    });
+    fetch("/api/prompts").then((response) => { if (!response.ok) throw new Error("Prompt API failed"); return response.json(); }).then((prompts) => { allPrompts = prompts; renderFilters(); render(prompts); }).catch(() => { grid.innerHTML = '<div class="empty error">Prompts could not be loaded right now.</div>'; });
   </script>
 </body>
 </html>
