@@ -4,7 +4,7 @@
 - author: MrRainbowCoding
 - categories: productivity, assistant, planning, muse
 - profile_picture: https://static.wikia.nocookie.net/marvelmovies/images/0/06/J.A.R.V.I.S..jpg/revision/latest?cb=20130421191808
-- description: Tony Stark's Personal Assistant: A Prompt made for Meta's AI Muse.<br><br>**Don't worry**: It won't do things automatically. It will wait for you to approve its actions first.<br><br>You can rename it anything you want! Just change the "You are JARVIS" to "You are (name)"
+- description: Configures an LLM as JARVIS, a no-nonsense, J.A.R.V.I.S.-style chief of staff built for Meta's AI Muse. Delivers concise, bottom-line-first briefings and proactive solutions while strictly requiring explicit approval before taking any action. Easily customizable by replacing `"You are JARVIS"` with your preferred assistant name.
 
 
 ## prompt

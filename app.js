@@ -10,8 +10,15 @@ app.disable("x-powered-by");
 function parsePromptFile(fileName) {
   const filePath = path.join(root, "prompts", "data", fileName);
   const markdown = fs.readFileSync(filePath, "utf8");
-  const dataSection = markdown.match(/^##\s+data\s*\n([\s\S]*?)(?:\n##\s+prompt\s*\n|$)/i)?.[1] || "";
-  const promptSection = markdown.match(/^##\s+prompt\s*\n([\s\S]*)/im)?.[1]?.trim() || "";
+  const headers = [...markdown.matchAll(/^##[ \t]+(data|prompt)[ \t]*$/gim)];
+  const dataHeader = headers.find((header) => header[1].toLowerCase() === "data");
+  const promptHeader = headers.find((header) => header[1].toLowerCase() === "prompt" && (!dataHeader || header.index > dataHeader.index));
+  const dataSection = dataHeader && promptHeader
+    ? markdown.slice(dataHeader.index + dataHeader[0].length, promptHeader.index)
+    : "";
+  const promptSection = promptHeader
+    ? markdown.slice(promptHeader.index + promptHeader[0].length).trim()
+    : "";
   const data = {};
   dataSection.split("\n").forEach((line) => {
     const match = line.match(/^\s*-\s*([\w-]+)\s*:\s*(.*?)\s*$/);
