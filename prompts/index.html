@@ -22,7 +22,18 @@
     .avatar img { width: 100%; height: 100%; object-fit: cover; }
     .name { font-weight: 700; }
     .file { margin-top: 2px; color: var(--muted); font-size: 10px; }
-    .description { flex: 1; margin: 18px 0; color: #666b75; font-size: 13px; }
+    .author { margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .description { flex: 1; margin: 18px 0; color: #666b75; font-size: 13px; white-space: pre-wrap; }
+    .description p { margin: 0 0 7px; }
+    .description p:last-child { margin-bottom: 0; }
+    .description strong, .description em { color: var(--ink); }
+    .preview { margin: 0 0 12px; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; }
+    .preview summary { padding-top: 11px; cursor: pointer; font-weight: 650; }
+    .prompt-content { max-height: 180px; margin-top: 10px; padding: 10px; overflow: auto; color: #666b75; border-radius: 8px; background: #f7f6f4; font-size: 12px; white-space: pre-wrap; }
+    .prompt-content h1, .prompt-content h2, .prompt-content h3 { margin: 0 0 7px; font-size: 14px; }
+    .prompt-content p { margin: 0 0 8px; }
+    .prompt-content ul, .prompt-content ol { margin: 0 0 8px; padding-left: 20px; }
+    .prompt-content code { padding: 2px 4px; border-radius: 4px; background: #ebe9e6; }
     .copy { padding: 9px 12px; color: #fff; border: 0; border-radius: 8px; background: var(--purple); font-size: 12px; font-weight: 650; }
     .copy:hover { background: #5e37d2; }
     .empty { padding: 48px 20px; color: var(--muted); border: 1px dashed #d9d6d1; border-radius: 14px; text-align: center; }
@@ -38,16 +49,22 @@
     </div>
     <section class="grid" id="promptGrid"><div class="empty">Loading prompts…</div></section>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
   <script>
     const grid = document.getElementById("promptGrid");
     const count = document.getElementById("count");
     function escapeHtml(value) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character]); }
+    function renderMarkup(value) {
+      if (typeof marked === "undefined" || typeof DOMPurify === "undefined") return escapeHtml(value).replace(/\r?\n/g, "<br>");
+      return DOMPurify.sanitize(marked.parse(value, { breaks: true }));
+    }
     function render(prompts) {
       count.textContent = `${prompts.length} ${prompts.length === 1 ? "prompt" : "prompts"}`;
       if (!prompts.length) { grid.innerHTML = '<div class="empty">No prompts yet. Add Markdown files to <code>prompts/data</code>.</div>'; return; }
       grid.innerHTML = prompts.map((prompt) => {
         const avatar = prompt.profilePicture ? `<img src="${escapeHtml(prompt.profilePicture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : escapeHtml(prompt.name.charAt(0).toUpperCase());
-        return `<article class="card"><div class="identity"><div class="avatar">${avatar}</div><div><div class="name">${escapeHtml(prompt.name)}</div><div class="file">${escapeHtml(prompt.id)}.md</div></div></div><p class="description">${escapeHtml(prompt.description || "No description provided.")}</p><button class="copy" type="button" data-prompt="${encodeURIComponent(prompt.prompt)}">Copy prompt</button></article>`;
+        return `<article class="card"><div class="identity"><div class="avatar">${avatar}</div><div><div class="name">${escapeHtml(prompt.name)}</div><div class="file">${escapeHtml(prompt.id)}.md</div>${prompt.author ? `<div class="author">By ${escapeHtml(prompt.author)}</div>` : ""}</div></div><div class="description">${renderMarkup(prompt.description || "No description provided.")}</div><details class="preview"><summary>Preview prompt</summary><div class="prompt-content">${renderMarkup(prompt.prompt)}</div></details><button class="copy" type="button" data-prompt="${encodeURIComponent(prompt.prompt)}">Copy prompt</button></article>`;
       }).join("");
       grid.querySelectorAll(".copy").forEach((button) => button.addEventListener("click", async () => {
         await navigator.clipboard.writeText(decodeURIComponent(button.dataset.prompt));

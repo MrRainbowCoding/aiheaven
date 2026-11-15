@@ -5,6 +5,7 @@ Put each prompt Markdown file in `prompts/data/`. Each file has two sections:
 ## data
 
 - `name`: the prompt name
+- `author`: the prompt author
 - `profile_picture`: optional image URL or path
 - `description`: optional short description
 

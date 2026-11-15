@@ -20,6 +20,7 @@ function parsePromptFile(fileName) {
   return {
     id: fileName.replace(/\.md$/i, ""),
     name: data.name || fileName.replace(/\.md$/i, ""),
+    author: data.author || "",
     profilePicture: data.profile_picture || "",
     description: data.description || "",
     prompt: promptSection
