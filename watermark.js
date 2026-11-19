@@ -15,7 +15,9 @@
         width: 50px;
         height: 50px;
         opacity: .7;
-        pointer-events: none;
+      }
+      #${watermarkId} a {
+        display: block;
       }
       #${watermarkId} img {
         display: block;
@@ -28,10 +30,15 @@
 
   const watermark = document.createElement("div");
   watermark.id = watermarkId;
-  watermark.setAttribute("aria-hidden", "true");
+  const link = document.createElement("a");
+  link.href = "https://mrrainbow.dev";
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.setAttribute("aria-label", "Visit mrrainbow.dev");
   const image = document.createElement("img");
   image.src = imageData;
-  image.alt = "";
-  watermark.appendChild(image);
+  image.alt = "mrrainbow.dev";
+  link.appendChild(image);
+  watermark.appendChild(link);
   document.body.appendChild(watermark);
 })();
