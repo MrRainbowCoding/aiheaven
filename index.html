@@ -132,11 +132,13 @@
     textarea { display: block; width: 100%; min-height: 38px; max-height: 130px; padding: 2px 0; resize: none; color: var(--ink); border: 0; outline: 0; background: transparent; }
     textarea::placeholder { color: #b1b2b7; }
     .composer-bottom { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; }
-    .composer-tools { display: flex; gap: 8px; color: #a4a6ad; }
+    .composer-tools { display: flex; flex-wrap: wrap; gap: 8px; color: #a4a6ad; }
     .tool { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; }
     .tool:hover { background: #f5f3fa; color: var(--purple); }
     .tool.listening { color: var(--purple); background: var(--purple-soft); }
-    .voice-status { max-width: 130px; color: var(--muted); font-size: 10px; line-height: 1.25; }
+    .tool:disabled { cursor: wait; opacity: .65; }
+    .voice-status { flex-basis: 100%; color: var(--muted); font-size: 10px; line-height: 1.25; }
+    .voice-status:empty { display: none; }
     .send { display: grid; place-items: center; width: 31px; height: 31px; color: #fff; border: 0; border-radius: 8px; background: var(--purple); }
     .send:disabled { cursor: not-allowed; opacity: .5; }
     .send svg { width: 15px; }
@@ -201,7 +203,7 @@
         </div>
         <div class="chat-card">
           <div class="messages" id="messages"><div class="typing" id="typing"><i></i><i></i><i></i><span>Thinking…</span></div></div>
-          <form class="composer" id="composer"><input id="fileInput" type="file" multiple hidden><div class="attachments" id="attachments"></div><textarea id="prompt" rows="1" placeholder="Ask anything…"></textarea><div class="composer-bottom"><div class="composer-tools"><button class="tool" id="attachButton" type="button" aria-label="Attach files" title="Attach files">＋</button><button class="tool" id="voiceButton" type="button" aria-label="Start voice input" aria-pressed="false" title="Start voice input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg></button><button class="tool memory-tool" id="memoryToggle" type="button" aria-label="Turn memory off" title="Memory is on">M</button><span class="memory-label">Memory on</span><span class="voice-status" id="voiceStatus" aria-live="polite"></span></div><button class="send" id="send" type="submit" aria-label="Send message" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 14-7-3 14-4-6-7-1Z"/><path d="m12 13 4-5"/></svg></button></div></form>
+          <form class="composer" id="composer"><input id="fileInput" type="file" multiple hidden><div class="attachments" id="attachments"></div><textarea id="prompt" rows="1" placeholder="Ask anything…"></textarea><div class="composer-bottom"><div class="composer-tools"><button class="tool" id="attachButton" type="button" aria-label="Attach files" title="Attach files">＋</button><button class="tool" id="voiceButton" type="button" aria-label="Start voice input. Audio will be sent to Puter for transcription; charges may apply." aria-pressed="false" title="Audio is sent to Puter for transcription; charges may apply."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg></button><button class="tool memory-tool" id="memoryToggle" type="button" aria-label="Turn memory off" title="Memory is on">M</button><span class="memory-label">Memory on</span><span class="voice-status" id="voiceStatus" aria-live="polite"></span></div><button class="send" id="send" type="submit" aria-label="Send message" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 14-7-3 14-4-6-7-1Z"/><path d="m12 13 4-5"/></svg></button></div></form>
         </div>
         <div class="suggestions"><button class="suggestion" type="button">Brainstorm an idea</button><button class="suggestion" type="button">Explain something simply</button><button class="suggestion" type="button">Help me write</button><button class="suggestion" type="button">Make a plan</button></div>
       </section>
@@ -232,10 +234,10 @@
     const memoryLabel = document.querySelector(".memory-label");
     const voiceButton = document.getElementById("voiceButton");
     const voiceStatus = document.getElementById("voiceStatus");
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let speechRecognition = null;
-    let voiceListening = false;
-    let voiceStopRequested = false;
+    let mediaRecorder = null;
+    let voiceStream = null;
+    let voiceBusy = false;
+    let voiceRecordingFailed = false;
     const memoryKey = "heaven-memory";
     const historyKey = "heaven-chat-history";
     const currentChatKey = "heaven-current-chat";
@@ -327,62 +329,111 @@
     });
     document.getElementById("clearHistory").addEventListener("click", () => { chatHistory = []; localStorage.removeItem(historyKey); renderHistory(); });
     prompt.addEventListener("input", () => { send.disabled = !prompt.value.trim() && !attachments.length; prompt.style.height = "auto"; prompt.style.height = Math.min(prompt.scrollHeight, 130) + "px"; });
-    function setVoiceListening(listening) {
-      voiceListening = listening;
-      voiceButton.classList.toggle("listening", listening);
-      voiceButton.setAttribute("aria-pressed", String(listening));
-      voiceButton.setAttribute("aria-label", listening ? "Stop voice input" : "Start voice input");
-      voiceButton.title = listening ? "Stop voice input" : "Start voice input";
+    function syncVoiceButton(recording = false) {
+      voiceButton.disabled = voiceBusy;
+      voiceButton.classList.toggle("listening", recording);
+      voiceButton.setAttribute("aria-pressed", String(recording));
+      voiceButton.setAttribute("aria-label", voiceBusy ? "Transcribing voice input" : recording ? "Stop voice input" : "Start voice input. Audio will be sent to Puter for transcription; charges may apply.");
+      voiceButton.title = voiceBusy ? "Transcribing voice input" : recording ? "Stop and transcribe recording" : "Audio is sent to Puter for transcription; charges may apply.";
     }
-    if (SpeechRecognition) {
-      speechRecognition = new SpeechRecognition();
-      speechRecognition.lang = navigator.language || "en-US";
-      speechRecognition.interimResults = false;
-      speechRecognition.continuous = false;
-      speechRecognition.onresult = (event) => {
-        const transcript = Array.from(event.results).slice(event.resultIndex).map((result) => result[0].transcript).join("").trim();
-        if (!transcript) return;
-        prompt.value += prompt.value && !/\s$/.test(prompt.value) ? ` ${transcript}` : transcript;
-        prompt.dispatchEvent(new Event("input", { bubbles: true }));
-        voiceStatus.textContent = "Voice input added.";
-      };
-      speechRecognition.onerror = (event) => {
-        const errors = {
-          "audio-capture": "No microphone was found.",
-          "network": "Voice input is unavailable. Check your connection.",
-          "no-speech": "No speech detected. Try again.",
-          "not-allowed": "Allow microphone access to use voice input.",
-          "service-not-allowed": "Voice input is blocked by the browser."
-        };
-        voiceStatus.textContent = errors[event.error] || (event.error === "aborted" ? "Voice input stopped." : "Voice input failed. Try again.");
-      };
-      speechRecognition.onend = () => {
-        setVoiceListening(false);
-        if (voiceStatus.textContent === "Listening…") {
-          voiceStatus.textContent = voiceStopRequested ? "Voice input stopped." : "No speech detected. Try again.";
+    function releaseVoiceStream() {
+      voiceStream?.getTracks().forEach((track) => track.stop());
+      voiceStream = null;
+    }
+    function addVoiceTranscript(text) {
+      prompt.value += prompt.value && !/\s$/.test(prompt.value) ? ` ${text}` : text;
+      prompt.dispatchEvent(new Event("input", { bubbles: true }));
+      prompt.focus();
+      voiceStatus.textContent = "Voice input added.";
+    }
+    async function transcribeVoiceRecording(blob) {
+      if (!blob.size) {
+        voiceStatus.textContent = "No audio was recorded. Try again.";
+        return;
+      }
+      voiceBusy = true;
+      syncVoiceButton();
+      voiceStatus.textContent = "Transcribing audio with Puter…";
+      try {
+        if (typeof puter === "undefined" || typeof puter.ai?.speech2txt !== "function") {
+          throw new Error("Puter speech-to-text is unavailable.");
         }
-        voiceStopRequested = false;
-      };
+        const result = await puter.ai.speech2txt(blob, { language: navigator.language.split("-")[0] });
+        const transcript = typeof result === "string" ? result : result?.text;
+        if (typeof transcript !== "string" || !transcript.trim()) {
+          voiceStatus.textContent = "No speech was recognized. Try again.";
+          return;
+        }
+        addVoiceTranscript(transcript.trim());
+      } catch (error) {
+        console.error("Could not transcribe voice recording.", error);
+        voiceStatus.textContent = "Could not transcribe audio. Check your connection and try again.";
+      } finally {
+        voiceBusy = false;
+        syncVoiceButton();
+      }
+    }
+    async function startVoiceRecording() {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        voiceStatus.textContent = "This browser does not support microphone recording.";
+        return;
+      }
+      voiceBusy = true;
+      syncVoiceButton();
+      voiceStatus.textContent = "Requesting microphone… audio is sent to Puter; charges may apply.";
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceStream = stream;
+        voiceRecordingFailed = false;
+        mediaRecorder = new MediaRecorder(stream);
+        const recorder = mediaRecorder;
+        const recordedChunks = [];
+        recorder.addEventListener("dataavailable", (event) => {
+          if (event.data.size) recordedChunks.push(event.data);
+        });
+        recorder.addEventListener("error", (event) => {
+          voiceRecordingFailed = true;
+          console.error("Voice recording failed.", event.error);
+          releaseVoiceStream();
+          voiceBusy = false;
+          syncVoiceButton();
+          voiceStatus.textContent = "Recording failed. Check microphone access and try again.";
+        });
+        recorder.addEventListener("stop", () => {
+          releaseVoiceStream();
+          mediaRecorder = null;
+          if (!voiceRecordingFailed) {
+            void transcribeVoiceRecording(new Blob(recordedChunks, { type: recorder.mimeType || "audio/webm" }));
+          }
+        });
+        recorder.start();
+        voiceBusy = false;
+        syncVoiceButton(true);
+        voiceStatus.textContent = "Recording… click to stop and transcribe.";
+      } catch (error) {
+        stream?.getTracks().forEach((track) => track.stop());
+        voiceStream = null;
+        mediaRecorder = null;
+        voiceBusy = false;
+        syncVoiceButton();
+        const permissionErrors = {
+          "NotAllowedError": "Allow microphone access to use voice input.",
+          "NotFoundError": "No microphone was found.",
+          "NotReadableError": "The microphone is already in use or unavailable."
+        };
+        voiceStatus.textContent = permissionErrors[error.name] || "Could not start recording. Check microphone access and try again.";
+        console.error("Could not start voice recording.", error);
+      }
     }
     voiceButton.addEventListener("click", () => {
-      if (!speechRecognition) {
-        voiceStatus.textContent = "Voice input isn't supported by this browser.";
-        return;
-      }
-      if (voiceListening) {
-        voiceStopRequested = true;
-        speechRecognition.stop();
-        return;
-      }
-      voiceStatus.textContent = "Listening…";
-      voiceStopRequested = false;
-      setVoiceListening(true);
-      try {
-        speechRecognition.start();
-      } catch (error) {
-        setVoiceListening(false);
-        voiceStatus.textContent = "Could not start voice input. Check microphone access and try again.";
-        console.error("Could not start voice input.", error);
+      if (mediaRecorder?.state === "recording") {
+        voiceBusy = true;
+        syncVoiceButton();
+        voiceStatus.textContent = "Transcribing audio with Puter…";
+        mediaRecorder.stop();
+      } else {
+        void startVoiceRecording();
       }
     });
     document.querySelectorAll(".suggestion").forEach((button) => button.addEventListener("click", () => { prompt.value = button.textContent; prompt.dispatchEvent(new Event("input")); prompt.focus(); }));
