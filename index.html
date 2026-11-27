@@ -146,6 +146,7 @@
     .typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--purple); animation: bounce .8s infinite alternate; }
     .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
     @keyframes bounce { to { transform: translateY(-4px); opacity: .4; } }
+    .mobile-menu { display: none; }
 
     @media (max-width: 720px) {
       .sidebar { display: none; }
@@ -156,6 +157,19 @@
       .message { max-width: 92%; }
       .messages { padding: 22px 18px; }
       .status { display: none; }
+      .main { padding-bottom: 76px; }
+      .mobile-menu {
+        position: fixed; z-index: 5; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(4, 1fr);
+        padding: 8px 10px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255, 255, 255, .94);
+        box-shadow: 0 -8px 24px rgba(38, 31, 67, .08); backdrop-filter: blur(12px);
+      }
+      .mobile-menu button, .mobile-menu a {
+        display: grid; place-items: center; gap: 3px; min-height: 48px; padding: 5px 2px; color: #858b96;
+        border: 0; border-radius: 9px; background: transparent; font-size: 9px; text-decoration: none;
+      }
+      .mobile-menu button:hover, .mobile-menu a:hover, .mobile-menu .active { color: var(--purple); background: var(--purple-soft); }
+      .mobile-menu svg { width: 18px; height: 18px; }
+      body.dark .mobile-menu { background: rgba(33, 31, 41, .94); }
     }
   </style>
 </head>
@@ -190,6 +204,12 @@
         <div class="suggestions"><button class="suggestion" type="button">Brainstorm an idea</button><button class="suggestion" type="button">Explain something simply</button><button class="suggestion" type="button">Help me write</button><button class="suggestion" type="button">Make a plan</button></div>
       </section>
     </main>
+    <nav class="mobile-menu" aria-label="Mobile menu">
+      <button class="active" id="mobileNewChatButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11.5a8 8 0 0 1-8 8 8.5 8.5 0 0 1-3.1-.6L4 20l1.2-4.1A8 8 0 1 1 20 11.5Z"/></svg><span>New chat</span></button>
+      <button id="mobileHistoryButton" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5h16M4 12h16M4 18.5h16"/></svg><span>History</span></button>
+      <a href="/prompts/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><span>Prompts</span></a>
+      <button id="mobileThemeToggle" type="button" aria-label="Enable dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="4"/></svg><span>Dark mode</span></button>
+    </nav>
   </div>
   <script src="/watermark.js"></script>
   <script>
@@ -225,12 +245,16 @@
       document.getElementById("themeToggle").setAttribute("aria-label", darkMode ? "Enable light mode" : "Enable dark mode");
       document.getElementById("themeToggle").title = darkMode ? "Switch to light mode" : "Switch to dark mode";
       document.getElementById("themeLabel").textContent = darkMode ? "Light mode" : "Dark mode";
+      document.getElementById("mobileThemeToggle").setAttribute("aria-label", darkMode ? "Enable light mode" : "Enable dark mode");
+      document.querySelector("#mobileThemeToggle span").textContent = darkMode ? "Light mode" : "Dark mode";
     }
-    document.getElementById("themeToggle").addEventListener("click", () => {
+    function toggleTheme() {
       darkMode = !darkMode;
       localStorage.setItem("heaven-dark-mode", String(darkMode));
       syncTheme();
-    });
+    }
+    document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+    document.getElementById("mobileThemeToggle").addEventListener("click", toggleTheme);
     syncTheme();
     function persistChats() {
       localStorage.setItem(historyKey, JSON.stringify(chatHistory.slice(-30)));
@@ -286,6 +310,13 @@
     document.addEventListener("click", (event) => { if (!picker.contains(event.target)) picker.classList.remove("open"); });
     document.getElementById("historyButton").addEventListener("click", (event) => { event.stopPropagation(); const panel = document.getElementById("historyPanel"); panel.hidden = !panel.hidden; renderHistory(); });
     document.getElementById("newChatButton").addEventListener("click", startNewChat);
+    document.getElementById("mobileNewChatButton").addEventListener("click", startNewChat);
+    document.getElementById("mobileHistoryButton").addEventListener("click", (event) => {
+      event.stopPropagation();
+      const panel = document.getElementById("historyPanel");
+      panel.hidden = !panel.hidden;
+      renderHistory();
+    });
     document.getElementById("clearHistory").addEventListener("click", () => { chatHistory = []; localStorage.removeItem(historyKey); renderHistory(); });
     prompt.addEventListener("input", () => { send.disabled = !prompt.value.trim() && !attachments.length; prompt.style.height = "auto"; prompt.style.height = Math.min(prompt.scrollHeight, 130) + "px"; });
     document.querySelectorAll(".suggestion").forEach((button) => button.addEventListener("click", () => { prompt.value = button.textContent; prompt.dispatchEvent(new Event("input")); prompt.focus(); }));
