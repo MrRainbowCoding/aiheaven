@@ -2,11 +2,18 @@
   publish = "."
   functions = "netlify/functions"
 
+[functions]
+  included_files = ["prompts/data/*.md"]
+
 [dev]
   command = "npm start"
 
 [[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/server"
+  from = "/api/*"
+  to = "/.netlify/functions/server/api/:splat"
   status = 200
-  force = true
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/server/health"
+  status = 200
