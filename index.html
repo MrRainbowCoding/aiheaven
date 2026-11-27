@@ -617,6 +617,7 @@
           setAccountUI(null);
           signedOutStatus.classList.add("error");
           signedOutStatus.textContent = "Could not load Puter account. Reload to try again.";
+          syncMobileAccount();
         }
       }
     }
@@ -683,6 +684,7 @@
       attachments = [];
       renderAttachments();
       renderChat();
+      persistChats();
     }
 
     function setModel(key) {
@@ -920,6 +922,7 @@
       if (!accountId) {
         signedOutStatus.classList.add("error");
         signedOutStatus.textContent = "Sign in with Puter to send and sync chats.";
+        syncMobileAccount();
         return;
       }
       if (isSending || (!text && !attachments.length) || (textOverride === undefined && send.disabled)) return;
